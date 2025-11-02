@@ -1,0 +1,11 @@
+pyproject.toml
+app/__init__.py
+app/main.py
+app/schemas.py
+app/services.py
+fairkick_backend.egg-info/PKG-INFO
+fairkick_backend.egg-info/SOURCES.txt
+fairkick_backend.egg-info/dependency_links.txt
+fairkick_backend.egg-info/requires.txt
+fairkick_backend.egg-info/top_level.txt
+tests/test_generate.py
