@@ -297,7 +297,10 @@ export default function App() {
           <Badge variant="success" className="w-fit">
             fairkick
           </Badge>
-          <h1 className="text-4xl font-bold md:text-5xl">아재FC✌🏻-Balance pickup games in seconds.</h1>
+          <div className="flex items-center gap-4">
+            <img src="/aj_logo.png" alt="아재FC 로고" className="h-12 w-12 md:h-16 md:w-16" />
+            <h2 className="text-4xl font-bold md:text-5xl">Balance pickup games in seconds.</h2>
+          </div> 
           <p className="text-lg text-muted-foreground md:w-3/4">
             Fairkick lets you capture player skill, lock in captains, and auto-build Green and
             Orange squads that feel balanced. Keep the flow, skip the squabbling.
