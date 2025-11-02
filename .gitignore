@@ -18,3 +18,19 @@ __pycache__
 # Editor
 .idea/
 .vscode/
+
+# Deployment
+DEPLOYMENT.md
+
+# Firebase
+.firebase/
+.env.production
+.env.local
+.env.*.local
+.firebaserc
+firebase.json
+
+# TypeScript build artifacts
+*.tsbuildinfo
+frontend/vite.config.d.ts
+frontend/vite.config.js

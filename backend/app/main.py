@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from . import services
 from .schemas import TeamRequest, TeamResponse
 
 app = FastAPI(title="fairkick API", version="0.1.0")
+
+# CORS 설정 - Firebase Hosting에서 접근 허용
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 배포 후 Firebase URL로 제한 가능
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")
