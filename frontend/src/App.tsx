@@ -137,13 +137,10 @@ function generateId() {
 }
 
 export default function App() {
-  const [players, setPlayers] = useState<Player[]>(DEFAULT_PLAYERS);
-  const [greenCaptainId, setGreenCaptainId] = useState<string | null>(
-    DEFAULT_PLAYERS[0]?.id ?? null,
-  );
-  const [orangeCaptainId, setOrangeCaptainId] = useState<string | null>(
-    DEFAULT_PLAYERS[1]?.id ?? null,
-  );
+  const [allPlayers, setAllPlayers] = useState<Player[]>(DEFAULT_PLAYERS);
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
+  const [greenCaptainId, setGreenCaptainId] = useState<string | null>(null);
+  const [orangeCaptainId, setOrangeCaptainId] = useState<string | null>(null);
   const [activeTeams, setActiveTeams] = useState<TeamAssignment | null>(null);
   const [lastTally, setLastTally] = useState<TeamTally | null>(null);
   const [newPlayerName, setNewPlayerName] = useState("");
@@ -152,9 +149,14 @@ export default function App() {
   const [flowError, setFlowError] = useState("");
   const [currentStep, setCurrentStep] = useState<FlowStep | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isAddPlayerModalOpen, setIsAddPlayerModalOpen] = useState(false);
   const generationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const availablePlayers = players;
+  const players = useMemo(
+    () => allPlayers.filter((player) => selectedPlayerIds.includes(player.id)),
+    [allPlayers, selectedPlayerIds],
+  );
+  const rosterPlayers = allPlayers;
 
   const summary = useMemo(() => {
     const squadSize = players.length;
@@ -204,23 +206,31 @@ export default function App() {
 
   function handleReturnHome() {
     handleCloseFlow();
+    setSelectedPlayerIds([]);
+    setGreenCaptainId(null);
+    setOrangeCaptainId(null);
     setActiveTeams(null);
     setLastTally(null);
+    setFormError("");
+    setFlowError("");
+    setNewPlayerName("");
+    setNewPlayerRating(1);
+    setIsAddPlayerModalOpen(false);
   }
 
   function handleAddPlayer() {
     if (!newPlayerName.trim()) {
       setFormError("Player name is required.");
-      return;
+      return false;
     }
 
-    const alreadyExists = players.some(
+    const alreadyExists = allPlayers.some(
       (player) => player.name.toLowerCase() === newPlayerName.trim().toLowerCase(),
     );
 
     if (alreadyExists) {
       setFormError("That player is already in your pool.");
-      return;
+      return false;
     }
 
     const newPlayer: Player = {
@@ -229,29 +239,41 @@ export default function App() {
       rating: newPlayerRating,
     };
 
-    setPlayers((prev) => [...prev, newPlayer]);
+    setAllPlayers((prev) => [...prev, newPlayer]);
+    setSelectedPlayerIds((prev) => [...prev, newPlayer.id]);
     setNewPlayerName("");
     setNewPlayerRating(1);
     setFormError("");
     setFlowError("");
-  }
-
-  function handleRemovePlayer(playerId: string) {
-    setPlayers((prev) => prev.filter((player) => player.id !== playerId));
-    if (playerId === greenCaptainId) {
-      setGreenCaptainId(null);
-    }
-    if (playerId === orangeCaptainId) {
-      setOrangeCaptainId(null);
-    }
     setActiveTeams(null);
     setLastTally(null);
+    return true;
   }
 
   function handleUpdatePlayerRating(playerId: string, rating: number) {
-    setPlayers((prev) =>
+    setAllPlayers((prev) =>
       prev.map((player) => (player.id === playerId ? { ...player, rating } : player)),
     );
+  }
+
+  function handleTogglePlayerSelection(playerId: string) {
+    setSelectedPlayerIds((prev) => {
+      if (prev.includes(playerId)) {
+        if (playerId === greenCaptainId) {
+          setGreenCaptainId(null);
+        }
+        if (playerId === orangeCaptainId) {
+          setOrangeCaptainId(null);
+        }
+        setActiveTeams(null);
+        setLastTally(null);
+        return prev.filter((id) => id !== playerId);
+      }
+      setActiveTeams(null);
+      setLastTally(null);
+      return [...prev, playerId];
+    });
+    setFlowError("");
   }
 
   async function handleGenerateTeams(): Promise<boolean> {
@@ -437,121 +459,85 @@ export default function App() {
           {currentStep === "players" ? (
             <>
               <DialogHeader>
-                <DialogTitle>Step 1 of 3 · Add players</DialogTitle>
+                <DialogTitle>Step 1 of 3 · Select players</DialogTitle>
               </DialogHeader>
               <div className="space-y-6">
-                <div className="grid gap-4 rounded-2xl border border-dashed border-border p-6">
-                  <div className="grid gap-2">
-                    <Label htmlFor="player-name">Player name</Label>
-                    <Input
-                      id="player-name"
-                      placeholder="e.g. Sam"
-                      value={newPlayerName}
-                      onChange={(event) => {
-                        setNewPlayerName(event.target.value);
-                        setFormError("");
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          handleAddPlayer();
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="player-rating">Skill tier</Label>
-                    <select
-                      id="player-rating"
-                      className="h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={newPlayerRating}
-                      onChange={(event) => {
-                        setNewPlayerRating(Number(event.target.value));
-                        setFormError("");
-                      }}
-                    >
-                      {RATING_LEVELS.map((level) => (
-                        <option key={level.value} value={level.value}>
-                          {level.label}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-muted-foreground">
-                      {RATING_LEVELS.find((level) => level.value === newPlayerRating)?.helper}
-                    </p>
-                  </div>
-                  <div className="flex justify-center flex-wrap gap-2">
-                    <Button onClick={handleAddPlayer}>Add player</Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => {
-                        setNewPlayerName("");
-                        setNewPlayerRating(1);
-                        setFormError("");
-                      }}
-                    >
-                      Clear
-                    </Button>
-                  </div>
-                  {formError ? (
-                    <p className="text-sm font-medium text-destructive">{formError}</p>
-                  ) : null}
-                </div>
-
                 <div className="space-y-3">
-                  <h2 className="text-lg font-semibold">Players</h2>
-                  <div className="flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-1">
-                    {availablePlayers.map((player) => {
+                  <h2 className="text-lg font-semibold">Roster</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Tap a player to toggle them into the session. Selected players highlight in blue.
+                  </p>
+                  <div className="flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-1">
+                    {rosterPlayers.map((player) => {
+                      const isSelected = selectedPlayerIds.includes(player.id);
                       return (
                         <div
                           key={player.id}
                           className={cn(
-                            "flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-background/80 p-4 transition hover:border-primary/60"
+                            "rounded-2xl border border-border bg-background/80 p-4 transition",
+                            isSelected && "border-blue-500/60 bg-blue-500/10",
                           )}
                         >
-                          <div className="flex flex-1">
-                            <span className="font-medium">{player.name}</span>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-xs font-medium text-muted-foreground">Tier:</span>
-                            <select
-                              className="h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              value={player.rating}
-                              onChange={(event) =>
-                                handleUpdatePlayerRating(player.id, Number(event.target.value))
-                              }
+                          <div className="flex flex-wrap items-start gap-3">
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePlayerSelection(player.id)}
+                              className="flex flex-1 flex-col items-start gap-1 text-left"
                             >
-                              {RATING_LEVELS.map((level) => (
-                                <option key={level.value} value={level.value}>
-                                  {level.label}
-                                </option>
-                              ))}
-                            </select>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemovePlayer(player.id)}
-                            >
-                              Remove
-                            </Button>
+                              <span className="font-medium text-foreground">{player.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {isSelected ? "Included in this session" : "Tap to include"}
+                              </span>
+                            </button>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              {isSelected ? (
+                                <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-600">
+                                  Selected
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              <span className="font-semibold">Tier:</span>
+                              <select
+                                className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                value={player.rating}
+                                onChange={(event) =>
+                                  handleUpdatePlayerRating(player.id, Number(event.target.value))
+                                }
+                              >
+                                {RATING_LEVELS.map((level) => (
+                                  <option key={level.value} value={level.value}>
+                                    {level.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
                           </div>
                         </div>
                       );
                     })}
-                    {availablePlayers.length === 0 ? (
-                      <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                        Start by adding at least four players to build teams.
-                      </p>
-                    ) : null}
                   </div>
                 </div>
               </div>
               <DialogFooter>
-                <div className="flex flex-1 flex-col gap-1 font-bold text-md text-muted-foreground">
-                  <span>
-                    Total {players.length} players.
-                  </span>
+                <div className="flex flex-1 flex-col gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setFormError("");
+                        setNewPlayerName("");
+                        setNewPlayerRating(1);
+                        setIsAddPlayerModalOpen(true);
+                      }}
+                    >
+                      + Add
+                    </Button>
+                    <span className="text-lg items-center font-semibold text-foreground">
+                      Total selected: {players.length} players
+                    </span>
+                  </div>
                   {flowError ? (
                     <span className="font-medium text-destructive">{flowError}</span>
                   ) : null}
@@ -697,7 +683,7 @@ export default function App() {
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
                       <p className="text-sm font-medium text-foreground">Building teams…</p>
                       <p className="text-xs">
-                        Give it a moment. We ensure at least a four second balancing run.
+                        Give it a moment. We ensure at least a two second balancing run.
                       </p>
                     </div>
                   ) : (
@@ -814,6 +800,96 @@ export default function App() {
               </DialogFooter>
             </>
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isAddPlayerModalOpen}
+        onOpenChange={(open) => {
+          setIsAddPlayerModalOpen(open);
+          if (!open) {
+            setFormError("");
+            setNewPlayerName("");
+            setNewPlayerRating(1);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add a player</DialogTitle>
+            <DialogDescription>
+              Capture the player&apos;s name and skill tier, then they will appear in the roster list.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="modal-player-name">Player name</Label>
+              <Input
+                id="modal-player-name"
+                placeholder="e.g. Sam"
+                value={newPlayerName}
+                onChange={(event) => {
+                  setNewPlayerName(event.target.value);
+                  setFormError("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    if (handleAddPlayer()) {
+                      setIsAddPlayerModalOpen(false);
+                    }
+                  }
+                }}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="modal-player-rating">Skill tier</Label>
+              <select
+                id="modal-player-rating"
+                className="h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={newPlayerRating}
+                onChange={(event) => {
+                  setNewPlayerRating(Number(event.target.value));
+                  setFormError("");
+                }}
+              >
+                {RATING_LEVELS.map((level) => (
+                  <option key={level.value} value={level.value}>
+                    {level.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {RATING_LEVELS.find((level) => level.value === newPlayerRating)?.helper}
+              </p>
+            </div>
+            {formError ? (
+              <p className="text-sm font-medium text-destructive">{formError}</p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setIsAddPlayerModalOpen(false);
+                setFormError("");
+                setNewPlayerName("");
+                setNewPlayerRating(1);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (handleAddPlayer()) {
+                  setIsAddPlayerModalOpen(false);
+                }
+              }}
+            >
+              Save player
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
