@@ -3,7 +3,7 @@ import { Loader2, Shuffle, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -347,7 +347,7 @@ export default function App() {
     const start = performance.now();
     const success = await handleGenerateTeams();
     const elapsed = performance.now() - start;
-    const waitTime = Math.max(0, 4000 - elapsed);
+    const waitTime = Math.max(0, 2000 - elapsed);
 
     generationTimerRef.current = setTimeout(() => {
       setIsGenerating(false);
@@ -406,10 +406,6 @@ export default function App() {
             <>
               <DialogHeader>
                 <DialogTitle>Step 1 of 3 · Add players</DialogTitle>
-                <DialogDescription>
-                  Capture everyone in the pickup and tag their skill tier. Manage roster edits right
-                  below.
-                </DialogDescription>
               </DialogHeader>
               <div className="space-y-6">
                 <div className="grid gap-4 rounded-2xl border border-dashed border-border p-6">
@@ -452,7 +448,7 @@ export default function App() {
                       {RATING_LEVELS.find((level) => level.value === newPlayerRating)?.helper}
                     </p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex justify-center flex-wrap gap-2">
                     <Button onClick={handleAddPlayer}>Add player</Button>
                     <Button
                       type="button"
@@ -473,7 +469,7 @@ export default function App() {
 
                 <div className="space-y-3">
                   <h2 className="text-lg font-semibold">Manage roster</h2>
-                  <div className="flex flex-col gap-3 max-h-[320px] overflow-y-auto pr-1">
+                  <div className="flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-1">
                     {availablePlayers.map((player) => {
                       const isCaptain = selectedCaptainIds.has(player.id);
                       return (
@@ -530,11 +526,12 @@ export default function App() {
                     <span className="font-medium text-destructive">{flowError}</span>
                   ) : null}
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" onClick={handleCloseFlow}>
+                <div className="flex items-center justify-center gap-2">
+                  <Button variant="ghost" size="lg" onClick={handleCloseFlow}>
                     Cancel
                   </Button>
                   <Button
+                    size="lg"
                     onClick={() => {
                       if (players.length < MIN_PLAYERS_REQUIRED) {
                         setFlowError(
