@@ -151,6 +151,9 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAddPlayerModalOpen, setIsAddPlayerModalOpen] = useState(false);
   const generationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rosterScrollRef = useRef<HTMLDivElement | null>(null);
+  const stepOneFooterRef = useRef<HTMLDivElement | null>(null);
+  const hasAutoScrolledFooterRef = useRef(false);
 
   const players = useMemo(
     () => allPlayers.filter((player) => selectedPlayerIds.includes(player.id)),
@@ -183,6 +186,40 @@ export default function App() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (currentStep !== "players") {
+      hasAutoScrolledFooterRef.current = false;
+      return;
+    }
+
+    hasAutoScrolledFooterRef.current = false;
+
+    const container = rosterScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const handleScroll = () => {
+      if (!container || hasAutoScrolledFooterRef.current) {
+        return;
+      }
+
+      const reachedBottom =
+        container.scrollTop + container.clientHeight >= container.scrollHeight - 32;
+
+      if (reachedBottom) {
+        hasAutoScrolledFooterRef.current = true;
+        stepOneFooterRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      }
+    };
+
+    container.addEventListener("scroll", handleScroll);
+
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+    };
+  }, [currentStep, rosterPlayers.length]);
 
   function clearGenerationTimer() {
     if (generationTimerRef.current) {
@@ -463,11 +500,29 @@ export default function App() {
               </DialogHeader>
               <div className="space-y-6">
                 <div className="space-y-3">
-                  <h2 className="text-lg font-semibold">Roster</h2>
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold">Roster</h2>
+                    <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            setFormError("");
+                            setNewPlayerName("");
+                            setNewPlayerRating(1);
+                            setIsAddPlayerModalOpen(true);
+                          }}
+                        >
+                          + Add
+                        </Button>
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     Tap a player to toggle them into the session. Selected players highlight in blue.
                   </p>
-                  <div className="flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-1">
+                  <div
+                    ref={rosterScrollRef}
+                    className="flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-1"
+                  >
                     {rosterPlayers.map((player) => {
                       const isSelected = selectedPlayerIds.includes(player.id);
                       return (
@@ -486,7 +541,7 @@ export default function App() {
                             >
                               <span className="font-medium text-foreground">{player.name}</span>
                               <span className="text-xs text-muted-foreground">
-                                {isSelected ? "Included in this session" : "Tap to include"}
+                                {isSelected ? "" : "Tap to include"}
                               </span>
                             </button>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -497,7 +552,6 @@ export default function App() {
                               ) : null}
                             </div>
                             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                              <span className="font-semibold">Tier:</span>
                               <select
                                 className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 value={player.rating}
@@ -519,50 +573,38 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              <DialogFooter>
-                <div className="flex flex-1 flex-col gap-2 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-3">
+              <div ref={stepOneFooterRef}>
+                <DialogFooter className="flex-col gap-3">
+                  <div className="flex flex-col gap-2 w-full text-sm">
+                    <span className="text-md font-semibold text-foreground">
+                      Total {players.length} players
+                    </span>
+                    {flowError ? (
+                      <span className="font-medium text-destructive">{flowError}</span>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center justify-center gap-2 w-full">
+                    <Button variant="ghost" size="lg" onClick={handleCloseFlow}>
+                      Cancel
+                    </Button>
                     <Button
-                      type="button"
-                      variant="secondary"
+                      size="lg"
                       onClick={() => {
-                        setFormError("");
-                        setNewPlayerName("");
-                        setNewPlayerRating(1);
-                        setIsAddPlayerModalOpen(true);
+                        if (players.length < MIN_PLAYERS_REQUIRED) {
+                          setFlowError(
+                            `Add at least ${MIN_PLAYERS_REQUIRED} players to move to the next step.`,
+                          );
+                          return;
+                        }
+                        setFlowError("");
+                        setCurrentStep("captains");
                       }}
                     >
-                      + Add
+                      Next
                     </Button>
-                    <span className="text-lg items-center font-semibold text-foreground">
-                      Total selected: {players.length} players
-                    </span>
                   </div>
-                  {flowError ? (
-                    <span className="font-medium text-destructive">{flowError}</span>
-                  ) : null}
-                </div>
-                <div className="flex items-center justify-center gap-2">
-                  <Button variant="ghost" size="lg" onClick={handleCloseFlow}>
-                    Cancel
-                  </Button>
-                  <Button
-                    size="lg"
-                    onClick={() => {
-                      if (players.length < MIN_PLAYERS_REQUIRED) {
-                        setFlowError(
-                          `Add at least ${MIN_PLAYERS_REQUIRED} players to move to the next step.`,
-                        );
-                        return;
-                      }
-                      setFlowError("");
-                      setCurrentStep("captains");
-                    }}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </DialogFooter>
+                </DialogFooter>
+              </div>
             </>
           ) : null}
 
@@ -929,10 +971,6 @@ function TeamList({
           </span>
           <p className="text-sm text-muted-foreground">{players.length} players</p>
         </div>
-        <div className="text-right text-xs uppercase tracking-wide text-muted-foreground">
-          <p>Total tier points</p>
-          <p className="text-xl font-semibold text-foreground">{total}</p>
-        </div>
       </div>
       <ul className="mt-4 grid gap-2">
         {players.map((player) => (
@@ -946,7 +984,7 @@ function TeamList({
             <div className="flex items-center gap-2">
               <span className="font-medium">{player.name}</span>
               {captainId && captainId === player.id ? (
-                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-primary">
                   Captain
                 </span>
               ) : null}
