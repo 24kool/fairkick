@@ -1,12 +1,19 @@
-import { useMemo, useState } from "react";
-import { Shuffle, Users } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Shuffle, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 type Player = {
@@ -26,6 +33,8 @@ type TeamTally = {
   gap: number;
   message: string;
 };
+
+type FlowStep = "players" | "captains" | "generate" | "results";
 
 const RATING_LEVELS = [
   { value: 3, label: "Pro", helper: "High-level competitive experience" },
@@ -62,6 +71,10 @@ const FAIRNESS_MESSAGES = [
   { threshold: Number.POSITIVE_INFINITY, message: "Wide gap detected – consider a quick reshuffle." },
 ];
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() ?? "";
+const SHOULD_USE_API = API_BASE_URL.length > 0;
+const MIN_PLAYERS_REQUIRED = 4;
+
 function ratingLabel(value: number) {
   return RATING_LEVELS.find((level) => level.value === value)?.label ?? `Level ${value}`;
 }
@@ -83,9 +96,6 @@ function totalRating(players: Player[]) {
   return players.reduce((sum, player) => sum + player.rating, 0);
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() ?? "";
-const SHOULD_USE_API = API_BASE_URL.length > 0;
-
 function generateId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -105,11 +115,13 @@ export default function App() {
   const [lastTally, setLastTally] = useState<TeamTally | null>(null);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [newPlayerRating, setNewPlayerRating] = useState<number>(1);
-  const [errorMessage, setErrorMessage] = useState<string>("");
+  const [formError, setFormError] = useState("");
+  const [flowError, setFlowError] = useState("");
+  const [currentStep, setCurrentStep] = useState<FlowStep | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const generationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const availablePlayers = useMemo(() => {
-    return [...players].sort((a, b) => b.rating - a.rating);
-  }, [players]);
+  const availablePlayers = players;
 
   const summary = useMemo(() => {
     const squadSize = players.length;
@@ -128,9 +140,45 @@ export default function App() {
     [greenCaptainId, orangeCaptainId],
   );
 
+  const isFlowOpen = currentStep !== null;
+
+  useEffect(() => {
+    return () => {
+      if (generationTimerRef.current) {
+        clearTimeout(generationTimerRef.current);
+      }
+    };
+  }, []);
+
+  function clearGenerationTimer() {
+    if (generationTimerRef.current) {
+      clearTimeout(generationTimerRef.current);
+      generationTimerRef.current = null;
+    }
+  }
+
+  function openFlow(step: FlowStep = "players") {
+    setFormError("");
+    setFlowError("");
+    setCurrentStep(step);
+  }
+
+  function handleCloseFlow() {
+    clearGenerationTimer();
+    setCurrentStep(null);
+    setIsGenerating(false);
+    setFlowError("");
+  }
+
+  function handleReturnHome() {
+    handleCloseFlow();
+    setActiveTeams(null);
+    setLastTally(null);
+  }
+
   function handleAddPlayer() {
     if (!newPlayerName.trim()) {
-      setErrorMessage("Player name is required.");
+      setFormError("Player name is required.");
       return;
     }
 
@@ -139,7 +187,7 @@ export default function App() {
     );
 
     if (alreadyExists) {
-      setErrorMessage("That player is already in your pool.");
+      setFormError("That player is already in your pool.");
       return;
     }
 
@@ -148,10 +196,12 @@ export default function App() {
       name: newPlayerName.trim(),
       rating: newPlayerRating,
     };
+
     setPlayers((prev) => [...prev, newPlayer]);
     setNewPlayerName("");
     setNewPlayerRating(1);
-    setErrorMessage("");
+    setFormError("");
+    setFlowError("");
   }
 
   function handleRemovePlayer(playerId: string) {
@@ -172,25 +222,25 @@ export default function App() {
     );
   }
 
-  async function handleGenerateTeams() {
+  async function handleGenerateTeams(): Promise<boolean> {
     if (!greenCaptainId || !orangeCaptainId) {
-      setErrorMessage("Select a captain for each team before generating lineups.");
-      return;
+      setFlowError("Select a captain for each team before generating lineups.");
+      return false;
     }
 
     if (greenCaptainId === orangeCaptainId) {
-      setErrorMessage("Captains must be different players.");
-      return;
+      setFlowError("Captains must be different players.");
+      return false;
     }
 
-    setErrorMessage("");
+    setFlowError("");
 
     const greenCaptain = players.find((player) => player.id === greenCaptainId);
     const orangeCaptain = players.find((player) => player.id === orangeCaptainId);
 
     if (!greenCaptain || !orangeCaptain) {
-      setErrorMessage("Captains must be part of the player pool.");
-      return;
+      setFlowError("Captains must be part of the player pool.");
+      return false;
     }
 
     if (SHOULD_USE_API) {
@@ -226,10 +276,10 @@ export default function App() {
 
         setActiveTeams({ green: greenTeam, orange: orangeTeam });
         setLastTally(tally);
-        return;
+        return true;
       } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "API request failed");
-        return;
+        setFlowError(error instanceof Error ? error.message : "API request failed");
+        return false;
       }
     }
 
@@ -282,16 +332,34 @@ export default function App() {
 
     setActiveTeams({ green, orange });
     setLastTally(tally);
+    return true;
   }
 
-  function handleResetTeams() {
-    setActiveTeams(null);
-    setLastTally(null);
-    setErrorMessage("");
+  async function triggerGeneration(autoNavigate = true) {
+    if (isGenerating) {
+      return;
+    }
+
+    clearGenerationTimer();
+    setFlowError("");
+    setIsGenerating(true);
+
+    const start = performance.now();
+    const success = await handleGenerateTeams();
+    const elapsed = performance.now() - start;
+    const waitTime = Math.max(0, 4000 - elapsed);
+
+    generationTimerRef.current = setTimeout(() => {
+      setIsGenerating(false);
+      if (success && autoNavigate) {
+        setCurrentStep("results");
+      }
+      generationTimerRef.current = null;
+    }, waitTime);
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-10 px-4 pb-16 pt-12">
+    <div className="mx-auto flex min-h-screen max-w-5xl flex-col gap-10 px-4 pb-16 pt-12">
       <header className="flex flex-col gap-6 rounded-3xl border border-border bg-card/80 p-8 shadow-sm backdrop-blur">
         <div className="flex flex-col gap-2">
           <Badge variant="success" className="w-fit">
@@ -299,11 +367,11 @@ export default function App() {
           </Badge>
           <div className="flex items-center gap-4">
             <img src="/aj_logo.png" alt="아재FC 로고" className="h-12 w-12 md:h-16 md:w-16" />
-            <h2 className="text-4xl font-bold md:text-5xl">Balance pickup games in seconds.</h2>
-          </div> 
+            <h2 className="text-4xl font-bold md:text-5xl">AZFC Team Generator</h2>
+          </div>
           <p className="text-lg text-muted-foreground md:w-3/4">
-            Fairkick lets you capture player skill, lock in captains, and auto-build Green and
-            Orange squads that feel balanced. Keep the flow, skip the squabbling.
+            Launch the guided flow to add players, lock in captains, and generate balanced squads –
+            one focused step at a time.
           </p>
         </div>
         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
@@ -318,89 +386,111 @@ export default function App() {
         </div>
       </header>
 
-      <main className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
-        <section className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Player pool</CardTitle>
-              <CardDescription>
-                Add your squad, tag each player as Pro, Advanced, Casual, or New, then pick your
-                captains.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-4 rounded-2xl border border-dashed border-border p-6">
-                <div className="grid gap-2">
-                  <Label htmlFor="player-name">Player name</Label>
-                  <Input
-                    id="player-name"
-                    placeholder="e.g. Sam"
-                    value={newPlayerName}
-                    onChange={(event) => setNewPlayerName(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        handleAddPlayer();
-                      }
-                    }}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="player-rating">Skill tier</Label>
-                  <select
-                    id="player-rating"
-                    className="h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    value={newPlayerRating}
-                    onChange={(event) => setNewPlayerRating(Number(event.target.value))}
-                  >
-                    {RATING_LEVELS.map((level) => (
-                      <option key={level.value} value={level.value}>
-                        {level.label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-muted-foreground">
-                    {RATING_LEVELS.find((level) => level.value === newPlayerRating)?.helper}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={handleAddPlayer}>Add player</Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => {
-                      setNewPlayerName("");
-                      setNewPlayerRating(1);
-                      setErrorMessage("");
-                    }}
-                  >
-                    Clear
-                  </Button>
-                </div>
-                {errorMessage ? (
-                  <p className="text-sm font-medium text-destructive">{errorMessage}</p>
-                ) : null}
-              </div>
+      <main className="grid gap-8">
+        <Card>
+          <CardContent className="flex justify-center py-12">
+            <Button size="lg" className="min-w-[220px]" onClick={() => openFlow("players")}>
+              Start
+            </Button>
+          </CardContent>
+        </Card>
+      </main>
 
-              <div className="space-y-3">
-                <h2 className="text-lg font-semibold">Manage roster</h2>
-                <div className="flex flex-col gap-3">
-                  {availablePlayers.map((player) => {
-                    const isCaptain = selectedCaptainIds.has(player.id);
-                    return (
-                      <div
-                        key={player.id}
-                        className={cn(
-                          "flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-background/80 p-4 transition hover:border-primary/60",
-                          isCaptain && "border-primary/70 bg-primary/5",
-                        )}
-                      >
-                        <div className="flex flex-1 flex-col gap-1">
-                          <span className="font-medium">{player.name}</span>
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            <span>Tier:</span>
+      <footer className="mb-10 text-center text-sm text-muted-foreground">
+        아재 FC Since 2022
+      </footer>
+
+      <Dialog open={isFlowOpen} onOpenChange={(open) => (!open ? handleCloseFlow() : undefined)}>
+        <DialogContent>
+          {currentStep === "players" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Step 1 of 3 · Add players</DialogTitle>
+                <DialogDescription>
+                  Capture everyone in the pickup and tag their skill tier. Manage roster edits right
+                  below.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-6">
+                <div className="grid gap-4 rounded-2xl border border-dashed border-border p-6">
+                  <div className="grid gap-2">
+                    <Label htmlFor="player-name">Player name</Label>
+                    <Input
+                      id="player-name"
+                      placeholder="e.g. Sam"
+                      value={newPlayerName}
+                      onChange={(event) => {
+                        setNewPlayerName(event.target.value);
+                        setFormError("");
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          handleAddPlayer();
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="player-rating">Skill tier</Label>
+                    <select
+                      id="player-rating"
+                      className="h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={newPlayerRating}
+                      onChange={(event) => {
+                        setNewPlayerRating(Number(event.target.value));
+                        setFormError("");
+                      }}
+                    >
+                      {RATING_LEVELS.map((level) => (
+                        <option key={level.value} value={level.value}>
+                          {level.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground">
+                      {RATING_LEVELS.find((level) => level.value === newPlayerRating)?.helper}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={handleAddPlayer}>Add player</Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => {
+                        setNewPlayerName("");
+                        setNewPlayerRating(1);
+                        setFormError("");
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                  {formError ? (
+                    <p className="text-sm font-medium text-destructive">{formError}</p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-3">
+                  <h2 className="text-lg font-semibold">Manage roster</h2>
+                  <div className="flex flex-col gap-3 max-h-[320px] overflow-y-auto pr-1">
+                    {availablePlayers.map((player) => {
+                      const isCaptain = selectedCaptainIds.has(player.id);
+                      return (
+                        <div
+                          key={player.id}
+                          className={cn(
+                            "flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-background/80 p-4 transition hover:border-primary/60",
+                            isCaptain && "border-primary/70 bg-primary/5",
+                          )}
+                        >
+                          <div className="flex flex-1">
+                            <span className="font-medium">{player.name}</span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-medium text-muted-foreground">Tier:</span>
                             <select
-                              className="h-8 rounded-md border border-input bg-background px-2 text-xs font-medium shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              className="h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                               value={player.rating}
                               onChange={(event) =>
                                 handleUpdatePlayerRating(player.id, Number(event.target.value))
@@ -412,181 +502,315 @@ export default function App() {
                                 </option>
                               ))}
                             </select>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemovePlayer(player.id)}
+                            >
+                              Remove
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <select
-                            className="h-10 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            value={player.id === greenCaptainId ? "green" : player.id === orangeCaptainId ? "orange" : ""}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              if (value === "green") {
-                                setGreenCaptainId(player.id);
-                                if (player.id === orangeCaptainId) {
-                                  setOrangeCaptainId(null);
-                                }
-                              } else if (value === "orange") {
-                                setOrangeCaptainId(player.id);
-                                if (player.id === greenCaptainId) {
-                                  setGreenCaptainId(null);
-                                }
-                              } else {
-                                if (player.id === greenCaptainId) {
-                                  setGreenCaptainId(null);
-                                }
-                                if (player.id === orangeCaptainId) {
-                                  setOrangeCaptainId(null);
-                                }
-                              }
-                            }}
-                          >
-                            <option value="">No captain role</option>
-                            <option value="green">Green captain</option>
-                            <option value="orange">Orange captain</option>
-                          </select>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemovePlayer(player.id)}
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {availablePlayers.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                      Start by adding at least four players to build teams.
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-
-        <section className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Captains</CardTitle>
-              <CardDescription>
-                Assign a captain to each side. Fairkick keeps captains locked to their teams when
-                shuffling.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="green-captain">Green captain</Label>
-                  <select
-                    id="green-captain"
-                    className="h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    value={greenCaptainId ?? ""}
-                    onChange={(event) => setGreenCaptainId(event.target.value || null)}
-                  >
-                    <option value="" disabled>
-                      Select player
-                    </option>
-                    {players.map((player) => (
-                      <option key={player.id} value={player.id} disabled={player.id === orangeCaptainId}>
-                        {player.name} (rating {player.rating})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="orange-captain">Orange captain</Label>
-                  <select
-                    id="orange-captain"
-                    className="h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    value={orangeCaptainId ?? ""}
-                    onChange={(event) => setOrangeCaptainId(event.target.value || null)}
-                  >
-                    <option value="" disabled>
-                      Select player
-                    </option>
-                    {players.map((player) => (
-                      <option key={player.id} value={player.id} disabled={player.id === greenCaptainId}>
-                        {player.name} (rating {player.rating})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="flex flex-wrap gap-3">
-                <Button className="flex-1" onClick={handleGenerateTeams}>
-                  Generate teams
-                </Button>
-                <Button className="flex-1" variant="outline" onClick={handleResetTeams}>
-                  Reset
-                </Button>
-              </div>
-
-              {lastTally ? (
-                <div className="rounded-2xl border border-primary/40 bg-primary/10 p-4 text-sm">
-                  <p className="font-semibold text-primary">
-                    Balance check: gap of {lastTally.gap} tier points.
-                  </p>
-                  <p className="text-muted-foreground">{lastTally.message}</p>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-                    <div className="rounded-xl border border-primary/30 bg-background/70 p-3 text-center">
-                      <p className="font-semibold text-primary">Green total</p>
-                      <p className="text-2xl font-bold text-primary">{lastTally.green}</p>
-                    </div>
-                    <div className="rounded-xl border border-secondary/30 bg-background/70 p-3 text-center">
-                      <p className="font-semibold text-secondary">Orange total</p>
-                      <p className="text-2xl font-bold text-secondary">{lastTally.orange}</p>
-                    </div>
+                      );
+                    })}
+                    {availablePlayers.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                        Start by adding at least four players to build teams.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
-              ) : (
-                <p className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-                  Lock captains and hit generate to preview lineups.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Lineups</CardTitle>
-              <CardDescription>
-                Captains stay fixed. Everyone else shuffles into even teams with each generate.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-6">
-              {activeTeams ? (
-                <div className="grid gap-4">
-                  <TeamList
-                    title="Green"
-                    accent="bg-emerald-500/15 text-emerald-700"
-                    players={activeTeams.green}
-                    total={lastTally?.green ?? 0}
-                  />
-                  <TeamList
-                    title="Orange"
-                    accent="bg-orange-500/15 text-orange-700"
-                    players={activeTeams.orange}
-                    total={lastTally?.orange ?? 0}
-                  />
+              </div>
+              <DialogFooter>
+                <div className="flex flex-1 flex-col gap-1 text-sm text-muted-foreground">
+                  <span>
+                    {players.length}/{MIN_PLAYERS_REQUIRED} players ready for a fair draw.
+                  </span>
+                  {flowError ? (
+                    <span className="font-medium text-destructive">{flowError}</span>
+                  ) : null}
                 </div>
-              ) : (
-                <div className="rounded-2xl border border-dashed border-border p-8 text-center text-muted-foreground">
-                  <p>No teams yet. Once you generate, they will appear here.</p>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" onClick={handleCloseFlow}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      if (players.length < MIN_PLAYERS_REQUIRED) {
+                        setFlowError(
+                          `Add at least ${MIN_PLAYERS_REQUIRED} players to move to the next step.`,
+                        );
+                        return;
+                      }
+                      setFlowError("");
+                      setCurrentStep("captains");
+                    }}
+                  >
+                    Next
+                  </Button>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </section>
-      </main>
+              </DialogFooter>
+            </>
+          ) : null}
 
-      <footer className="mb-10 text-center text-sm text-muted-foreground">
-        Built with React, Tailwind, and shadcn-inspired components.
-      </footer>
+          {currentStep === "captains" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Step 2 of 3 · Select captains</DialogTitle>
+                <DialogDescription>
+                  Lock in one Green and one Orange captain. They stay fixed when teams generate.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-6">
+                <div className="grid gap-4 rounded-2xl border border-dashed border-border p-6">
+                  <div className="grid gap-2">
+                    <Label htmlFor="green-captain">Green captain</Label>
+                    <select
+                      id="green-captain"
+                      className="h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={greenCaptainId ?? ""}
+                      onChange={(event) => {
+                        setGreenCaptainId(event.target.value || null);
+                        setFlowError("");
+                      }}
+                    >
+                      <option value="" disabled>
+                        Select player
+                      </option>
+                      {players.map((player) => (
+                        <option
+                          key={player.id}
+                          value={player.id}
+                          disabled={player.id === orangeCaptainId}
+                        >
+                          {player.name} (rating {player.rating})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="orange-captain">Orange captain</Label>
+                    <select
+                      id="orange-captain"
+                      className="h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={orangeCaptainId ?? ""}
+                      onChange={(event) => {
+                        setOrangeCaptainId(event.target.value || null);
+                        setFlowError("");
+                      }}
+                    >
+                      <option value="" disabled>
+                        Select player
+                      </option>
+                      {players.map((player) => (
+                        <option
+                          key={player.id}
+                          value={player.id}
+                          disabled={player.id === greenCaptainId}
+                        >
+                          {player.name} (rating {player.rating})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-border bg-background/80 p-4">
+                  <p className="text-sm font-semibold text-foreground">Roster reference</p>
+                  <p className="text-xs text-muted-foreground">
+                    Need to tweak tiers or remove someone? Jump back to the previous step.
+                  </p>
+                  <div className="mt-3 grid max-h-[200px] gap-2 overflow-y-auto pr-1 text-sm">
+                    {availablePlayers.map((player) => (
+                      <div
+                        key={player.id}
+                        className={cn(
+                          "flex items-center justify-between rounded-xl border border-border/60 bg-card/70 px-4 py-2",
+                          player.id === greenCaptainId && "border-emerald-500/50",
+                          player.id === orangeCaptainId && "border-orange-500/50",
+                        )}
+                      >
+                        <span className="font-medium">{player.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {ratingLabel(player.rating)} · {player.rating} pts
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <div className="flex flex-1 flex-col gap-1 text-sm text-muted-foreground">
+                  <span>Pick different captains for each side.</span>
+                  {flowError ? (
+                    <span className="font-medium text-destructive">{flowError}</span>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" onClick={() => setCurrentStep("players")}>
+                    Back
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      if (!greenCaptainId || !orangeCaptainId) {
+                        setFlowError("Select a captain for each team to continue.");
+                        return;
+                      }
+                      if (greenCaptainId === orangeCaptainId) {
+                        setFlowError("Captains must be different players.");
+                        return;
+                      }
+                      setFlowError("");
+                      setCurrentStep("generate");
+                      void triggerGeneration(true);
+                    }}
+                  >
+                    Generate teams
+                  </Button>
+                </div>
+              </DialogFooter>
+            </>
+          ) : null}
+
+          {currentStep === "generate" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Step 3 of 3 · Generate balanced teams</DialogTitle>
+                <DialogDescription>
+                  We&apos;ll build Green and Orange sides using skill tiers while keeping captains
+                  fixed.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-6">
+                <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">
+                  <p>Ready when you are. Tap generate and we&apos;ll spin up balanced squads.</p>
+                  <p className="mt-2 text-xs">
+                    We run a quick balancing pass and hold the results for review in the final
+                    modal.
+                  </p>
+                </div>
+                <div className="flex min-h-[140px] flex-col items-center justify-center rounded-2xl border border-border bg-background/70 p-6 text-center">
+                  {isGenerating ? (
+                    <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <p className="text-sm font-medium text-foreground">Building teams…</p>
+                      <p className="text-xs">
+                        Give it a moment. We ensure at least a four second balancing run.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+                      <p>Teams aren&apos;t generated yet.</p>
+                      <p className="text-xs">
+                        When you continue, the next modal shows the final lineups.
+                      </p>
+                    </div>
+                  )}
+                </div>
+                {flowError && !isGenerating ? (
+                  <div className="rounded-xl border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                    {flowError}
+                  </div>
+                ) : null}
+              </div>
+              <DialogFooter>
+                <div className="flex flex-1 flex-col gap-1 text-sm text-muted-foreground">
+                  <span>Balanced teams land in the next modal once the spinner completes.</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" onClick={() => setCurrentStep("captains")} disabled={isGenerating}>
+                    Back
+                  </Button>
+                  <Button onClick={() => void triggerGeneration(true)} disabled={isGenerating}>
+                    {isGenerating ? "Generating…" : "Generate teams"}
+                  </Button>
+                </div>
+              </DialogFooter>
+            </>
+          ) : null}
+
+          {currentStep === "results" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Balanced teams ready</DialogTitle>
+                <DialogDescription>
+                  Review the lineups, head back to tweak, or regenerate with a fresh shuffle.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-5">
+                {lastTally ? (
+                  <div className="rounded-2xl border border-primary/40 bg-primary/10 p-4 text-sm">
+                    <p className="font-semibold text-primary">
+                      Balance gap: {lastTally.gap} tier points.
+                    </p>
+                    <p className="text-muted-foreground">{lastTally.message}</p>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+                      <div className="rounded-xl border border-primary/30 bg-background/70 p-3 text-center">
+                        <p className="font-semibold text-primary">Green total</p>
+                        <p className="text-2xl font-bold text-primary">{lastTally.green}</p>
+                      </div>
+                      <div className="rounded-xl border border-secondary/30 bg-background/70 p-3 text-center">
+                        <p className="font-semibold text-secondary">Orange total</p>
+                        <p className="text-2xl font-bold text-secondary">{lastTally.orange}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+                {activeTeams ? (
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                    <TeamList
+                      title="Green"
+                      accent="bg-emerald-500/15 text-emerald-700"
+                      players={activeTeams.green}
+                      total={lastTally?.green ?? 0}
+                      showStats={false}
+                      className="h-full"
+                    />
+                    <TeamList
+                      title="Orange"
+                      accent="bg-orange-500/15 text-orange-700"
+                      players={activeTeams.orange}
+                      total={lastTally?.orange ?? 0}
+                      showStats={false}
+                      className="h-full"
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                    No teams yet. Head back one step and run the generator.
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <div className="flex flex-1 flex-col gap-1 text-sm text-muted-foreground">
+                  <span>Happy with the draw? You can close or shuffle again.</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setFlowError("");
+                      setCurrentStep("generate");
+                    }}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setFlowError("");
+                      setCurrentStep("generate");
+                      void triggerGeneration(true);
+                    }}
+                  >
+                    Regenerate
+                  </Button>
+                  <Button onClick={handleReturnHome}>Home(reset)</Button>
+                </div>
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -596,11 +820,13 @@ type TeamListProps = {
   players: Player[];
   total: number;
   accent: string;
+  showStats?: boolean;
+  className?: string;
 };
 
-function TeamList({ title, players, total, accent }: TeamListProps) {
+function TeamList({ title, players, total, accent, showStats = true, className }: TeamListProps) {
   return (
-    <div className="rounded-2xl border border-border bg-background/70 p-6 shadow-sm">
+    <div className={cn("rounded-2xl border border-border bg-background/70 p-6 shadow-sm", className)}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span
@@ -622,12 +848,17 @@ function TeamList({ title, players, total, accent }: TeamListProps) {
         {players.map((player) => (
           <li
             key={player.id}
-            className="flex items-center justify-between rounded-xl border border-border/60 bg-card/70 px-4 py-2 text-sm"
+            className={cn(
+              "flex items-center rounded-xl border border-border/60 bg-card/70 px-4 py-2 text-sm",
+              showStats ? "justify-between" : "justify-start",
+            )}
           >
             <span className="font-medium">{player.name}</span>
-            <span className="text-xs text-muted-foreground">
-              {ratingLabel(player.rating)} · {player.rating} pts
-            </span>
+            {showStats ? (
+              <span className="text-xs text-muted-foreground">
+                {ratingLabel(player.rating)} · {player.rating} pts
+              </span>
+            ) : null}
           </li>
         ))}
       </ul>
