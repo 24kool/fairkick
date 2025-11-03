@@ -496,7 +496,7 @@ export default function App() {
           {currentStep === "players" ? (
             <>
               <DialogHeader>
-                <DialogTitle>Step 1 of 3 · Select players</DialogTitle>
+                <DialogTitle>Step 1 of 3 · Select Players</DialogTitle>
               </DialogHeader>
               <div className="space-y-6">
                 <div className="space-y-3">
@@ -521,7 +521,7 @@ export default function App() {
                   </p>
                   <div
                     ref={rosterScrollRef}
-                    className="flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-1"
+                    className="flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-1"
                   >
                     {rosterPlayers.map((player) => {
                       const isSelected = selectedPlayerIds.includes(player.id);
@@ -981,7 +981,7 @@ function TeamList({
               showStats ? "justify-between" : "justify-start",
             )}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
               <span className="font-medium">{player.name}</span>
               {captainId && captainId === player.id ? (
                 <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-primary">
