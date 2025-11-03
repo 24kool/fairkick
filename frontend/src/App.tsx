@@ -521,7 +521,7 @@ export default function App() {
                   </p>
                   <div
                     ref={rosterScrollRef}
-                    className="flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-1"
+                    className="flex flex-col gap-2 max-h-[390px] overflow-y-auto pr-1"
                   >
                     {rosterPlayers.map((player) => {
                       const isSelected = selectedPlayerIds.includes(player.id);
@@ -554,6 +554,7 @@ export default function App() {
                             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                               <select
                                 className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                onPointerDown={(event) => event.stopPropagation()}
                                 value={player.rating}
                                 onChange={(event) =>
                                   handleUpdatePlayerRating(player.id, Number(event.target.value))
@@ -623,6 +624,7 @@ export default function App() {
                     <select
                       id="green-captain"
                       className="h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onPointerDown={(event) => event.stopPropagation()}
                       value={greenCaptainId ?? ""}
                       onChange={(event) => {
                         setGreenCaptainId(event.target.value || null);
@@ -648,6 +650,7 @@ export default function App() {
                     <select
                       id="orange-captain"
                       className="h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onPointerDown={(event) => event.stopPropagation()}
                       value={orangeCaptainId ?? ""}
                       onChange={(event) => {
                         setOrangeCaptainId(event.target.value || null);
