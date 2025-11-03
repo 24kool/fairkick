@@ -38,30 +38,48 @@ type FlowStep = "players" | "captains" | "generate" | "results";
 
 const RATING_LEVELS = [
   { value: 3, label: "Pro", helper: "High-level competitive experience" },
+  { value: 2.5, label: "Elite", helper: "Between pro and advanced, consistently sharp" },
   { value: 2, label: "Advanced", helper: "Strong pickup contributor" },
   { value: 1, label: "Casual", helper: "Plays regularly for fun" },
   { value: 0, label: "New", helper: "Learning the ropes" },
 ];
 
 const DEFAULT_PLAYERS: Player[] = [
-  { id: "p1", name: "Juho", rating: 3 },
-  { id: "p2", name: "Erae", rating: 3 },
-  { id: "p3", name: "Jihan", rating: 3 },
-  { id: "p4", name: "Donghyeon", rating: 3 },
-  { id: "p5", name: "KC", rating: 1 },
-  { id: "p6", name: "Subin", rating: 2 },
-  { id: "p7", name: "Soonhyeong", rating: 2 },
-  { id: "p8", name: "Taebaek", rating: 1 },
-  { id: "p9", name: "Kyeongoh", rating: 2 },
-  { id: "p10", name: "Seungyoon", rating: 1 },
-  { id: "p11", name: "Jaebak", rating: 2 },
-  { id: "p12", name: "Jaekyeong", rating: 2 },
-  { id: "p13", name: "Hongjik", rating: 2 },
-  { id: "p14", name: "Taehyeon", rating: 1 },
-  { id: "p15", name: "Jonghyeop", rating: 1 },
-  { id: "p16", name: "Hyeonggeun", rating: 2 },
-  { id: "p17", name: "Jaehoon", rating: 2 },
-  { id: "p18", name: "Taekang", rating: 1 },
+  { id: "p1", name: "유주호", rating: 2 },
+  { id: "p2", name: "이이레", rating: 2 },
+  { id: "p3", name: "윤지한", rating: 2 },
+  { id: "p4", name: "서동현", rating: 2 },
+  { id: "p5", name: "김경철", rating: 2 },
+  { id: "p6", name: "박수빈", rating: 2 },
+  { id: "p7", name: "김태강", rating: 2 },
+  { id: "p8", name: "김종진", rating: 2 },
+  { id: "p9", name: "Hank", rating: 2 },
+  { id: "p10", name: "이재박", rating: 2 },
+  { id: "p11", name: "한승훈", rating: 2 },
+  { id: "p12", name: "황순형", rating: 2 },
+  { id: "p13", name: "Juan", rating: 2 },
+  { id: "p14", name: "Devin", rating: 2 },
+  { id: "p15", name: "Saya", rating: 2 },
+  { id: "p16", name: "지형근", rating: 2 },
+  { id: "p17", name: "김민중", rating: 2 },
+  { id: "p18", name: "송경호", rating: 2 },
+  { id: "p19", name: "Lazaro", rating: 2 },
+  { id: "p20", name: "주승열", rating: 2 },
+  { id: "p21", name: "정동영", rating: 2 },   
+  { id: "p22", name: "최창현", rating: 2 },
+  { id: "p23", name: "이제경", rating: 2 },
+  { id: "p24", name: "이건웅", rating: 2 },
+  { id: "p25", name: "전상구", rating: 2 },
+  { id: "p26", name: "황한얼", rating: 2 },
+  { id: "p27", name: "김동일", rating: 2 },
+  { id: "p28", name: "최재훈", rating: 2 },
+  { id: "p29", name: "이홍직", rating: 2 },
+  { id: "p30", name: "이승윤", rating: 2 },
+  { id: "p31", name: "서순신", rating: 2 },
+  { id: "p32", name: "Yusuke", rating: 2 },
+  { id: "p33", name: "이종협", rating: 2 },
+  { id: "p34", name: "Sean", rating: 2 },
+  { id: "p35", name: "임태현", rating: 2 },
 ];
 
 const FAIRNESS_MESSAGES = [
@@ -77,6 +95,21 @@ const MIN_PLAYERS_REQUIRED = 4;
 
 function ratingLabel(value: number) {
   return RATING_LEVELS.find((level) => level.value === value)?.label ?? `Level ${value}`;
+}
+
+function closestRatingLabel(value: number) {
+  const closest = RATING_LEVELS.reduce((best, level) => {
+    const bestDelta = Math.abs(best.value - value);
+    const levelDelta = Math.abs(level.value - value);
+    if (levelDelta < bestDelta) {
+      return level;
+    }
+    if (levelDelta === bestDelta && level.value > best.value) {
+      return level;
+    }
+    return best;
+  }, RATING_LEVELS[0]);
+  return closest.label;
 }
 
 function pickFairnessMessage(gap: number) {
@@ -127,11 +160,10 @@ export default function App() {
     const squadSize = players.length;
     const total = players.reduce((sum, player) => sum + player.rating, 0);
     const averageValue = squadSize > 0 ? total / squadSize : 0;
-    const rounded = Math.round(averageValue);
     return {
       squadSize,
       averageValue,
-      averageLabel: ratingLabel(rounded),
+      averageLabel: closestRatingLabel(averageValue),
     };
   }, [players]);
 
@@ -468,16 +500,14 @@ export default function App() {
                 </div>
 
                 <div className="space-y-3">
-                  <h2 className="text-lg font-semibold">Manage roster</h2>
+                  <h2 className="text-lg font-semibold">Players</h2>
                   <div className="flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-1">
                     {availablePlayers.map((player) => {
-                      const isCaptain = selectedCaptainIds.has(player.id);
                       return (
                         <div
                           key={player.id}
                           className={cn(
-                            "flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-background/80 p-4 transition hover:border-primary/60",
-                            isCaptain && "border-primary/70 bg-primary/5",
+                            "flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-background/80 p-4 transition hover:border-primary/60"
                           )}
                         >
                           <div className="flex flex-1">
@@ -518,9 +548,9 @@ export default function App() {
                 </div>
               </div>
               <DialogFooter>
-                <div className="flex flex-1 flex-col gap-1 text-sm text-muted-foreground">
+                <div className="flex flex-1 flex-col gap-1 font-bold text-md text-muted-foreground">
                   <span>
-                    {players.length}/{MIN_PLAYERS_REQUIRED} players ready for a fair draw.
+                    Total {players.length} players.
                   </span>
                   {flowError ? (
                     <span className="font-medium text-destructive">{flowError}</span>
@@ -555,13 +585,13 @@ export default function App() {
               <DialogHeader>
                 <DialogTitle>Step 2 of 3 · Select captains</DialogTitle>
                 <DialogDescription>
-                  Lock in one Green and one Orange captain. They stay fixed when teams generate.
+                  Lock in one Blue and one Orange captain. They stay fixed when teams generate.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-6">
                 <div className="grid gap-4 rounded-2xl border border-dashed border-border p-6">
                   <div className="grid gap-2">
-                    <Label htmlFor="green-captain">Green captain</Label>
+                    <Label htmlFor="green-captain">Blue captain</Label>
                     <select
                       id="green-captain"
                       className="h-11 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -580,7 +610,7 @@ export default function App() {
                           value={player.id}
                           disabled={player.id === orangeCaptainId}
                         >
-                          {player.name} (rating {player.rating})
+                          {player.name}
                         </option>
                       ))}
                     </select>
@@ -605,33 +635,10 @@ export default function App() {
                           value={player.id}
                           disabled={player.id === greenCaptainId}
                         >
-                          {player.name} (rating {player.rating})
+                          {player.name}
                         </option>
                       ))}
                     </select>
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-border bg-background/80 p-4">
-                  <p className="text-sm font-semibold text-foreground">Roster reference</p>
-                  <p className="text-xs text-muted-foreground">
-                    Need to tweak tiers or remove someone? Jump back to the previous step.
-                  </p>
-                  <div className="mt-3 grid max-h-[200px] gap-2 overflow-y-auto pr-1 text-sm">
-                    {availablePlayers.map((player) => (
-                      <div
-                        key={player.id}
-                        className={cn(
-                          "flex items-center justify-between rounded-xl border border-border/60 bg-card/70 px-4 py-2",
-                          player.id === greenCaptainId && "border-emerald-500/50",
-                          player.id === orangeCaptainId && "border-orange-500/50",
-                        )}
-                      >
-                        <span className="font-medium">{player.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {ratingLabel(player.rating)} · {player.rating} pts
-                        </span>
-                      </div>
-                    ))}
                   </div>
                 </div>
               </div>
@@ -642,7 +649,7 @@ export default function App() {
                     <span className="font-medium text-destructive">{flowError}</span>
                   ) : null}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center gap-2">
                   <Button variant="ghost" onClick={() => setCurrentStep("players")}>
                     Back
                   </Button>
@@ -673,8 +680,7 @@ export default function App() {
               <DialogHeader>
                 <DialogTitle>Step 3 of 3 · Generate balanced teams</DialogTitle>
                 <DialogDescription>
-                  We&apos;ll build Green and Orange sides using skill tiers while keeping captains
-                  fixed.
+                  We&apos;ll build Blue and Orange sides using skill tiers while keeping captains fixed.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-6">
@@ -741,9 +747,9 @@ export default function App() {
                     </p>
                     <p className="text-muted-foreground">{lastTally.message}</p>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-                      <div className="rounded-xl border border-primary/30 bg-background/70 p-3 text-center">
-                        <p className="font-semibold text-primary">Green total</p>
-                        <p className="text-2xl font-bold text-primary">{lastTally.green}</p>
+                      <div className="rounded-xl border border-blue-400/30 bg-background/70 p-3 text-center">
+                        <p className="font-semibold text-blue-600">Blue total</p>
+                        <p className="text-2xl font-bold text-blue-600">{lastTally.green}</p>
                       </div>
                       <div className="rounded-xl border border-secondary/30 bg-background/70 p-3 text-center">
                         <p className="font-semibold text-secondary">Orange total</p>
@@ -755,12 +761,13 @@ export default function App() {
                 {activeTeams ? (
                   <div className="grid grid-cols-2 gap-3 sm:gap-4">
                     <TeamList
-                      title="Green"
-                      accent="bg-emerald-500/15 text-emerald-700"
+                      title="Blue"
+                      accent="bg-blue-500/15 text-blue-700"
                       players={activeTeams.green}
                       total={lastTally?.green ?? 0}
                       showStats={false}
                       className="h-full"
+                      captainId={greenCaptainId ?? undefined}
                     />
                     <TeamList
                       title="Orange"
@@ -769,6 +776,7 @@ export default function App() {
                       total={lastTally?.orange ?? 0}
                       showStats={false}
                       className="h-full"
+                      captainId={orangeCaptainId ?? undefined}
                     />
                   </div>
                 ) : (
@@ -819,9 +827,18 @@ type TeamListProps = {
   accent: string;
   showStats?: boolean;
   className?: string;
+  captainId?: string | null;
 };
 
-function TeamList({ title, players, total, accent, showStats = true, className }: TeamListProps) {
+function TeamList({
+  title,
+  players,
+  total,
+  accent,
+  showStats = true,
+  className,
+  captainId,
+}: TeamListProps) {
   return (
     <div className={cn("rounded-2xl border border-border bg-background/70 p-6 shadow-sm", className)}>
       <div className="flex items-center justify-between">
@@ -850,7 +867,14 @@ function TeamList({ title, players, total, accent, showStats = true, className }
               showStats ? "justify-between" : "justify-start",
             )}
           >
-            <span className="font-medium">{player.name}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{player.name}</span>
+              {captainId && captainId === player.id ? (
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                  Captain
+                </span>
+              ) : null}
+            </div>
             {showStats ? (
               <span className="text-xs text-muted-foreground">
                 {ratingLabel(player.rating)} · {player.rating} pts
