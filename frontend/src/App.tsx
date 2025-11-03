@@ -468,7 +468,7 @@ export default function App() {
         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2 rounded-full border border-border px-4 py-1.5">
             <Users className="h-4 w-4 text-primary" />
-            {summary.squadSize} players registered
+            {allPlayers.length} players registered
           </div>
           <div className="flex items-center gap-2 rounded-full border border-border px-4 py-1.5">
             <Shuffle className="h-4 w-4 text-secondary" />
