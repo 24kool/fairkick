@@ -37,11 +37,11 @@ type TeamTally = {
 type FlowStep = "players" | "captains" | "generate" | "results";
 
 const RATING_LEVELS = [
-  { value: 3, label: "Pro", helper: "High-level competitive experience" },
-  { value: 2.5, label: "Elite", helper: "Between pro and advanced, consistently sharp" },
-  { value: 2, label: "Advanced", helper: "Strong pickup contributor" },
-  { value: 1, label: "Casual", helper: "Plays regularly for fun" },
-  { value: 0, label: "New", helper: "Learning the ropes" },
+  { value: 3, label: "Pro (+3)", helper: "High-level competitive experience" },
+  { value: 2.5, label: "Elite (+2.5)", helper: "Between pro and advanced, consistently sharp" },
+  { value: 2, label: "Advanced (+2)", helper: "Strong pickup contributor" },
+  { value: 1, label: "Casual (+1)", helper: "Plays regularly for fun" },
+  { value: 0, label: "New (+0)", helper: "Learning the ropes" },
 ];
 
 const DEFAULT_PLAYERS: Player[] = [
