@@ -7,7 +7,7 @@ from typing import Iterable
 from .schemas import Player
 
 
-FAIRNESS_MESSAGES: list[tuple[int, str]] = [
+FAIRNESS_MESSAGES: list[tuple[float, str]] = [
     (0, "Perfectly balanced – as all things should be."),
     (1, "Teams look tight! Expect a competitive match."),
     (2, "Slight edge to one side, but still playable."),
@@ -15,7 +15,7 @@ FAIRNESS_MESSAGES: list[tuple[int, str]] = [
 ]
 
 
-def pick_message(gap: int) -> str:
+def pick_message(gap: float) -> str:
     for threshold, message in FAIRNESS_MESSAGES:
         if gap <= threshold:
             return message
@@ -28,7 +28,7 @@ def shuffle_players(players: Iterable[Player]) -> list[Player]:
     return clone
 
 
-def total_rating(players: Iterable[Player]) -> int:
+def total_rating(players: Iterable[Player]) -> float:
     return sum(player.rating for player in players)
 
 

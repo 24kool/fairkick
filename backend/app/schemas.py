@@ -6,11 +6,11 @@ from pydantic import BaseModel, Field, conlist
 class Player(BaseModel):
     id: str = Field(..., description="Unique identifier for a player")
     name: str = Field(..., min_length=1, max_length=50)
-    rating: int = Field(
+    rating: float = Field(
         ...,
         ge=0,
         le=3,
-        description="Tier points: New=0, Casual=1, Advanced=2, Pro=3",
+        description="Tier points: New=0, Casual=1, Advanced=2, Elite=2.5, Pro=3",
     )
 
 
@@ -23,7 +23,7 @@ class TeamRequest(BaseModel):
 class TeamResponse(BaseModel):
     green: list[Player]
     orange: list[Player]
-    green_total: int
-    orange_total: int
-    rating_gap: int
+    green_total: float
+    orange_total: float
+    rating_gap: float
     message: str

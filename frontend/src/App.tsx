@@ -352,7 +352,22 @@ export default function App() {
 
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
-          throw new Error(payload?.detail ?? "Failed to generate teams");
+          let errorMessage = "Failed to generate teams";
+          
+          if (payload?.detail) {
+            if (typeof payload.detail === 'string') {
+              errorMessage = payload.detail;
+            } else if (Array.isArray(payload.detail)) {
+              // Pydantic validation errors are arrays
+              errorMessage = payload.detail.map((err: { loc?: string[]; msg?: string }) => 
+                `${err.loc?.join(' > ') || 'Error'}: ${err.msg || 'Invalid input'}`
+              ).join('; ');
+            } else {
+              errorMessage = JSON.stringify(payload.detail);
+            }
+          }
+          
+          throw new Error(errorMessage);
         }
 
         const payload = await response.json();
